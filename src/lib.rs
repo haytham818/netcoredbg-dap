@@ -311,10 +311,13 @@ fn resolve_debug_configuration(
     let project_info = DotnetProject::from_project_file(&project, &project_contents, &config)?;
     let program = project_info.output_dll_path();
 
-    config["program"] = serde_json::Value::String(worktree_variable_path(&program));
+    let worktree_root = worktree.root_path();
+    config["program"] = serde_json::Value::String(absolute_worktree_path(&program, &worktree_root));
     if config.get("cwd").and_then(|cwd| cwd.as_str()).is_none() {
-        config["cwd"] =
-            serde_json::Value::String(worktree_variable_path(project_info.project_dir()));
+        config["cwd"] = serde_json::Value::String(absolute_worktree_path(
+            project_info.project_dir(),
+            &worktree_root,
+        ));
     }
 
     Ok(config)
@@ -346,14 +349,37 @@ fn normalize_project_path(path: &str, worktree: &Worktree) -> String {
         .to_string()
 }
 
-fn worktree_variable_path(path: &str) -> String {
+fn absolute_worktree_path(path: &str, worktree_root: &str) -> String {
+    let path = normalize_worktree_path(path);
+    let worktree_root = worktree_root.replace('\\', "/");
+    let worktree_root = worktree_root.trim_end_matches('/');
+
     if path.is_empty() || path == "." {
-        "$ZED_WORKTREE_ROOT".to_string()
-    } else if path.starts_with('$') || path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("$ZED_WORKTREE_ROOT/{path}")
+        return worktree_root.to_string();
     }
+
+    if is_absolute_path(&path) {
+        return path;
+    }
+
+    if worktree_root.is_empty() {
+        path
+    } else {
+        format!("{worktree_root}/{}", path.trim_start_matches('/'))
+    }
+}
+
+fn is_absolute_path(path: &str) -> bool {
+    Path::new(path).is_absolute()
+        || path.starts_with('/')
+        || path
+            .as_bytes()
+            .get(1)
+            .is_some_and(|separator| *separator == b':')
+            && path
+                .as_bytes()
+                .get(2)
+                .is_some_and(|separator| *separator == b'/' || *separator == b'\\')
 }
 
 fn binary_name() -> &'static str {
@@ -760,6 +786,37 @@ mod tests {
         assert_eq!(safe_path_component("3.1.3-1062"), "3.1.3-1062");
         assert_eq!(safe_path_component("../bad/tag"), ".._bad_tag");
         assert_eq!(safe_path_component(".."), "unknown");
+    }
+
+    #[test]
+    fn expands_worktree_relative_paths_to_absolute_paths() {
+        assert_eq!(
+            absolute_worktree_path(
+                "MonoMario.Game/bin/Debug/net9.0/MonoMario.Game.dll",
+                "/repo"
+            ),
+            "/repo/MonoMario.Game/bin/Debug/net9.0/MonoMario.Game.dll"
+        );
+        assert_eq!(
+            absolute_worktree_path("$ZED_WORKTREE_ROOT/MonoMario.Game", "/repo"),
+            "/repo/MonoMario.Game"
+        );
+        assert_eq!(absolute_worktree_path(".", "/repo"), "/repo");
+    }
+
+    #[test]
+    fn preserves_existing_absolute_paths() {
+        assert_eq!(
+            absolute_worktree_path(
+                "/repo/MonoMario.Game/bin/Debug/net9.0/MonoMario.Game.dll",
+                "/repo"
+            ),
+            "/repo/MonoMario.Game/bin/Debug/net9.0/MonoMario.Game.dll"
+        );
+        assert_eq!(
+            absolute_worktree_path("C:/repo/MonoMario.Game", "D:/other"),
+            "C:/repo/MonoMario.Game"
+        );
     }
 }
 
