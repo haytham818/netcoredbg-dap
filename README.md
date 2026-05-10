@@ -114,6 +114,10 @@ Attach to an existing .NET process:
 ]
 ```
 
+## Full field reference 
+
+[netcoredbg.json](debug_adapter_schemas/netcoredbg.json)
+
 ## Local development
 
 In Zed, run `zed: install dev extension` and select this repository.
