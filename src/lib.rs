@@ -2,19 +2,15 @@ use std::{fs, io::Read, path::Path};
 
 use sha2::{Digest, Sha256};
 use zed_extension_api::{
-    self as zed, serde_json, Architecture, AttachRequest, BuildTaskDefinition,
-    BuildTaskDefinitionTemplatePayload, DebugAdapterBinary, DebugConfig, DebugRequest,
-    DebugScenario, DebugTaskDefinition, DownloadedFileType, LaunchRequest, Os,
-    StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest, TaskTemplate, Worktree,
+    self as zed, serde_json, Architecture, AttachRequest, DebugAdapterBinary, DebugConfig,
+    DebugRequest, DebugScenario, DebugTaskDefinition, DownloadedFileType, LaunchRequest, Os,
+    StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest, Worktree,
 };
 
 const ADAPTER_NAME: &str = "netcoredbg";
-const LOCATOR_NAME: &str = "dotnet";
 const NETCOREDBG_REPOSITORY: &str = "Samsung/netcoredbg";
 const NETCOREDBG_VERSION: &str = "3.1.3-1062";
 const NETCOREDBG_INSTALL_DIR: &str = "netcoredbg";
-const PROJECT_CONFIGURATION_ARG: &str = "--netcoredbg-dap-configuration";
-const PROJECT_FRAMEWORK_ARG: &str = "--netcoredbg-dap-framework";
 
 struct NetcoredbgExtension {
     cached_binary_path: Option<String>,
@@ -87,17 +83,13 @@ impl zed::Extension for NetcoredbgExtension {
                     .collect::<serde_json::Map<_, _>>();
 
                 if program.ends_with(".csproj") {
-                    let (project_args, configuration, target_framework) =
-                        split_project_metadata_args(args);
                     (
                         serde_json::json!({
                             "request": "launch",
                             "project": program,
                             "cwd": cwd,
-                            "args": project_args,
+                            "args": args,
                             "env": env,
-                            "configuration": configuration,
-                            "targetFramework": target_framework,
                             "stopAtEntry": config.stop_on_entry.unwrap_or(false),
                         }),
                         None,
@@ -137,63 +129,6 @@ impl zed::Extension for NetcoredbgExtension {
             config: scenario_config.to_string(),
             tcp_connection: None,
         })
-    }
-
-    fn dap_locator_create_scenario(
-        &mut self,
-        locator_name: String,
-        build_task: TaskTemplate,
-        resolved_label: String,
-        debug_adapter_name: String,
-    ) -> Option<DebugScenario> {
-        if locator_name != LOCATOR_NAME || debug_adapter_name != ADAPTER_NAME {
-            return None;
-        }
-
-        let dotnet_task = DotnetTask::from_task(&build_task)?;
-        let project = dotnet_task.project.clone()?;
-        let build_task = dotnet_build_task(
-            Some(project),
-            build_task.cwd.clone(),
-            dotnet_task.configuration.clone(),
-            dotnet_task.target_framework.clone(),
-        );
-
-        Some(DebugScenario {
-            label: format!("Debug {resolved_label}"),
-            adapter: ADAPTER_NAME.to_string(),
-            build: Some(BuildTaskDefinition::Template(
-                BuildTaskDefinitionTemplatePayload {
-                    locator_name: Some(LOCATOR_NAME.to_string()),
-                    template: build_task,
-                },
-            )),
-            config: "{}".to_string(),
-            tcp_connection: None,
-        })
-    }
-
-    fn run_dap_locator(
-        &mut self,
-        locator_name: String,
-        build_task: TaskTemplate,
-    ) -> Result<DebugRequest, String> {
-        if locator_name != LOCATOR_NAME {
-            return Err(format!("unknown debug locator: {locator_name}"));
-        }
-
-        let dotnet_task = DotnetTask::from_task(&build_task)
-            .ok_or_else(|| "expected a dotnet build task".to_string())?;
-        let project = dotnet_task
-            .project
-            .ok_or_else(|| "dotnet debug locator requires an explicit .csproj path".to_string())?;
-
-        Ok(DebugRequest::Launch(LaunchRequest {
-            program: project,
-            cwd: build_task.cwd,
-            args: project_metadata_args(dotnet_task.configuration, dotnet_task.target_framework),
-            envs: build_task.env,
-        }))
     }
 }
 
@@ -485,112 +420,6 @@ fn safe_path_component(component: &str) -> String {
     }
 }
 
-fn dotnet_build_task(
-    project: Option<String>,
-    cwd: Option<String>,
-    configuration: Option<String>,
-    target_framework: Option<String>,
-) -> TaskTemplate {
-    let mut args = vec!["build".to_string()];
-    if let Some(project) = project {
-        if !project.is_empty() {
-            args.push(project);
-        }
-    }
-    if let Some(configuration) = configuration {
-        args.extend(["--configuration".to_string(), configuration]);
-    }
-    if let Some(target_framework) = target_framework {
-        args.extend(["--framework".to_string(), target_framework]);
-    }
-
-    TaskTemplate {
-        label: "dotnet build".to_string(),
-        command: "dotnet".to_string(),
-        args,
-        env: vec![],
-        cwd,
-    }
-}
-
-fn project_metadata_args(
-    configuration: Option<String>,
-    target_framework: Option<String>,
-) -> Vec<String> {
-    let mut args = Vec::new();
-    if let Some(configuration) = configuration {
-        args.extend([PROJECT_CONFIGURATION_ARG.to_string(), configuration]);
-    }
-    if let Some(target_framework) = target_framework {
-        args.extend([PROJECT_FRAMEWORK_ARG.to_string(), target_framework]);
-    }
-    args
-}
-
-fn split_project_metadata_args(args: Vec<String>) -> (Vec<String>, Option<String>, Option<String>) {
-    let mut project_args = Vec::new();
-    let mut configuration = None;
-    let mut target_framework = None;
-    let mut args = args.into_iter();
-
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            PROJECT_CONFIGURATION_ARG => configuration = args.next(),
-            PROJECT_FRAMEWORK_ARG => target_framework = args.next(),
-            _ => project_args.push(arg),
-        }
-    }
-
-    (project_args, configuration, target_framework)
-}
-
-#[derive(Debug, Default)]
-struct DotnetTask {
-    project: Option<String>,
-    configuration: Option<String>,
-    target_framework: Option<String>,
-}
-
-impl DotnetTask {
-    fn from_task(task: &TaskTemplate) -> Option<Self> {
-        if Path::new(&task.command).file_stem()?.to_str()? != "dotnet" {
-            return None;
-        }
-
-        let subcommand = task.args.first().map(String::as_str)?;
-        if !matches!(subcommand, "run" | "build") {
-            return None;
-        }
-
-        let mut dotnet_task = DotnetTask::default();
-        let mut args = task.args.iter().skip(1).peekable();
-        while let Some(arg) = args.next() {
-            match arg.as_str() {
-                "--project" | "-p" => dotnet_task.project = args.next().cloned(),
-                "--configuration" | "-c" => dotnet_task.configuration = args.next().cloned(),
-                "--framework" | "-f" => dotnet_task.target_framework = args.next().cloned(),
-                value if value.starts_with("--project=") => {
-                    dotnet_task.project = value.split_once('=').map(|(_, value)| value.to_string())
-                }
-                value if value.starts_with("--configuration=") => {
-                    dotnet_task.configuration =
-                        value.split_once('=').map(|(_, value)| value.to_string())
-                }
-                value if value.starts_with("--framework=") => {
-                    dotnet_task.target_framework =
-                        value.split_once('=').map(|(_, value)| value.to_string())
-                }
-                value if value.ends_with(".csproj") => {
-                    dotnet_task.project = Some(value.to_string())
-                }
-                _ => {}
-            }
-        }
-
-        Some(dotnet_task)
-    }
-}
-
 #[derive(Debug)]
 struct DotnetProject {
     path: String,
@@ -735,50 +564,6 @@ mod tests {
             project.output_dll_path(),
             "bin/Release/net9.0/linux-x64/Game.Desktop.dll"
         );
-    }
-
-    #[test]
-    fn parses_dotnet_run_task() {
-        let task = TaskTemplate {
-            label: "dotnet run".to_string(),
-            command: "dotnet".to_string(),
-            args: vec![
-                "run".to_string(),
-                "--project".to_string(),
-                "src/Game/Game.csproj".to_string(),
-                "-c".to_string(),
-                "Debug".to_string(),
-                "-f".to_string(),
-                "net8.0".to_string(),
-            ],
-            env: vec![],
-            cwd: Some("$ZED_WORKTREE_ROOT".to_string()),
-        };
-        let dotnet_task = DotnetTask::from_task(&task).unwrap();
-
-        assert_eq!(
-            dotnet_task.project,
-            Some("src/Game/Game.csproj".to_string())
-        );
-        assert_eq!(dotnet_task.configuration, Some("Debug".to_string()));
-        assert_eq!(dotnet_task.target_framework, Some("net8.0".to_string()));
-    }
-
-    #[test]
-    fn preserves_locator_project_metadata_separately_from_program_args() {
-        let metadata_args =
-            project_metadata_args(Some("Release".to_string()), Some("net9.0".to_string()));
-        let (program_args, configuration, target_framework) = split_project_metadata_args(
-            [
-                metadata_args,
-                vec!["--player".to_string(), "one".to_string()],
-            ]
-            .concat(),
-        );
-
-        assert_eq!(program_args, vec!["--player", "one"]);
-        assert_eq!(configuration, Some("Release".to_string()));
-        assert_eq!(target_framework, Some("net9.0".to_string()));
     }
 
     #[test]

@@ -8,5 +8,3 @@ repository = "https://github.com/haytham818/netcoredbg-dap"
 
 [debug_adapters.netcoredbg]
 schema_path = "debug_adapter_schemas/netcoredbg.json"
-
-[debug_locators.dotnet]

@@ -35,7 +35,7 @@ Add the following to your global or local `settings.json` to configure a custom 
 
 ## Automatic project debugging
 
-You can point the debug configuration at a `.csproj` instead of a built DLL. The extension reads `TargetFramework`, `AssemblyName`, and related project metadata, then resolves the DLL under `bin/<Configuration>/<TargetFramework>/` automatically. This resolves the launch target; use the task locator below when you also want Zed to build before debugging.
+You can point the debug configuration at a `.csproj` instead of a built DLL. The extension reads `TargetFramework`, `AssemblyName`, and related project metadata, then resolves the DLL under `bin/<Configuration>/<TargetFramework>/` automatically.
 
 ```json
 [
@@ -55,15 +55,31 @@ You can point the debug configuration at a `.csproj` instead of a built DLL. The
 
 If the project file is named the same as the worktree root directory and is located at the root, `project` can be omitted and the extension will try to infer it.
 
-## Automatic build from Zed tasks
+## Build before debugging
 
-The extension registers a `dotnet` debug locator. Zed can convert matching `dotnet run` or `dotnet build` tasks with an explicit `.csproj` path into debug sessions that run `dotnet build` before launching netcoredbg.
+Use Zed's standard `build` field in `debug.json` when you want to compile before launching netcoredbg:
 
-The locator understands task arguments such as:
-
-```sh
-dotnet run --project src/MyGame/MyGame.csproj -c Debug -f net8.0
-dotnet build src/MyGame/MyGame.csproj --configuration Debug --framework net8.0
+```json
+[
+  {
+    "adapter": "netcoredbg",
+    "label": "Debug .NET app",
+    "request": "launch",
+    "project": "$ZED_WORKTREE_ROOT/MyGame.csproj",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "build": {
+      "command": "dotnet",
+      "args": [
+        "build",
+        "$ZED_WORKTREE_ROOT/MyGame.csproj",
+        "--configuration",
+        "Debug"
+      ]
+    }, 
+    //or a task
+    "build" : "<label of a task(in tasks.json)>"
+  }
+]
 ```
 
 ## Example `debug.json`
@@ -93,7 +109,7 @@ Attach to an existing .NET process:
     "adapter": "netcoredbg",
     "label": "Attach .NET process",
     "request": "attach",
-    "processId": 12345
+    "processId": 451451
   }
 ]
 ```
