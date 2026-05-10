@@ -1,10 +1,11 @@
 [package]
 name = "netcoredbg-dap"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
+sha2 = "0.10"
 zed_extension_api = "0.7.0"

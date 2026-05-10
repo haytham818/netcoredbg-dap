@@ -14,6 +14,27 @@
       "type": "string",
       "description": "Path to the .dll or executable to debug. Usually $ZED_WORKTREE_ROOT/bin/Debug/<tfm>/<project>.dll."
     },
+    "project": {
+      "type": "string",
+      "description": "Path to a .csproj file. When provided without program, the extension resolves the output DLL automatically. Use the dotnet debug locator for automatic builds."
+    },
+    "configuration": {
+      "type": "string",
+      "default": "Debug",
+      "description": "MSBuild configuration used when resolving a project output path."
+    },
+    "targetFramework": {
+      "type": "string",
+      "description": "Target framework used when resolving a project output path. Defaults to TargetFramework or the first TargetFrameworks entry from the .csproj."
+    },
+    "runtimeIdentifier": {
+      "type": "string",
+      "description": "Optional runtime identifier segment used in the output path, for example linux-x64 or win-x64."
+    },
+    "assemblyName": {
+      "type": "string",
+      "description": "Optional assembly name override. Defaults to AssemblyName from the .csproj or the project file name."
+    },
     "args": {
       "type": "array",
       "items": { "type": "string" },
@@ -52,10 +73,6 @@
     }
   },
   "allOf": [
-    {
-      "if": { "properties": { "request": { "const": "launch" } } },
-      "then": { "required": ["program"] }
-    },
     {
       "if": { "properties": { "request": { "const": "attach" } } },
       "then": { "required": ["processId"] }
