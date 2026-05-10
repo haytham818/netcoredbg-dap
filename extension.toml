@@ -1,0 +1,10 @@
+id = "netcoredbg-dap"
+name = "netcoredbg DAP"
+version = "0.1.0"
+schema_version = 1
+authors = ["Haytham"]
+description = "C#/.NET debug adapter support via Samsung netcoredbg"
+repository = "https://github.com/haytham818/netcoredbg-dap"
+
+[debug_adapters.netcoredbg]
+schema_path = "debug_adapter_schemas/netcoredbg.json"

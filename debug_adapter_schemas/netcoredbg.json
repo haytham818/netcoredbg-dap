@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "netcoredbg Debug Configuration",
+  "description": "Launch or attach to .NET applications through Samsung netcoredbg.",
+  "type": "object",
+  "required": ["request"],
+  "properties": {
+    "request": {
+      "type": "string",
+      "enum": ["launch", "attach"],
+      "description": "Whether to launch a new .NET process or attach to an existing process."
+    },
+    "program": {
+      "type": "string",
+      "description": "Path to the .dll or executable to debug. Usually $ZED_WORKTREE_ROOT/bin/Debug/<tfm>/<project>.dll."
+    },
+    "args": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Arguments passed to the debuggee."
+    },
+    "cwd": {
+      "type": "string",
+      "default": "$ZED_WORKTREE_ROOT",
+      "description": "Working directory for the debuggee."
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {},
+      "description": "Environment variables for the debuggee."
+    },
+    "stopAtEntry": {
+      "type": "boolean",
+      "default": false,
+      "description": "Stop at the entry point before running user code."
+    },
+    "processId": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Process id to attach to."
+    },
+    "justMyCode": {
+      "type": "boolean",
+      "description": "netcoredbg/VS Code style Just My Code option."
+    },
+    "sourceFileMap": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Maps source paths from build/debug symbols to local paths."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "request": { "const": "launch" } } },
+      "then": { "required": ["program"] }
+    },
+    {
+      "if": { "properties": { "request": { "const": "attach" } } },
+      "then": { "required": ["processId"] }
+    }
+  ],
+  "additionalProperties": true
+}
