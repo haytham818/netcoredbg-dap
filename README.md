@@ -19,6 +19,20 @@ Currently supported upstream assets are:
 
 If Samsung does not publish an asset for your platform, install `netcoredbg` manually and put it on PATH or configure a custom debug adapter path in Zed.
 
+### Configure custom netcoredbg binary in zed settings
+
+Add the following to your global or local `settings.json` to configure a custom `netcoredbg` binary path:
+
+```json
+{
+  "dap": {
+    "netcoredbg": {
+      "binary": "path/to/netcoredbg"
+    }
+  }
+}
+```
+
 ## Automatic project debugging
 
 You can point the debug configuration at a `.csproj` instead of a built DLL. The extension reads `TargetFramework`, `AssemblyName`, and related project metadata, then resolves the DLL under `bin/<Configuration>/<TargetFramework>/` automatically. This resolves the launch target; use the task locator below when you also want Zed to build before debugging.
